@@ -81,14 +81,40 @@ ALTER COLUMN [date] DATE;
 COMMIT TRANSACTION;
 
 -- ==========================================
--- STEP 4: NULL HANDLING & IMPUTATION
+-- STEP 4: FIX NUMERIC DATA TYPES (CRITICAL FIX)
 -- ==========================================
 BEGIN TRANSACTION;
 
--- Convert string 'NULL's to actual database NULLs
+-- A. Fix total_laid_off (Convert from Text to Integer)
+UPDATE layoffs_staging
+SET total_laid_off = NULL
+WHERE total_laid_off IN ('', 'None', 'NULL') OR total_laid_off IS NULL;
+
+ALTER TABLE layoffs_staging
+ALTER COLUMN total_laid_off INT;
+
+-- B. Fix funds_raised_millions (Convert from Text to Integer)
 UPDATE layoffs_staging
 SET funds_raised_millions = NULL
-WHERE funds_raised_millions = 'NULL';
+WHERE funds_raised_millions IN ('', 'None', 'NULL') OR funds_raised_millions IS NULL;
+
+ALTER TABLE layoffs_staging
+ALTER COLUMN funds_raised_millions INT;
+
+-- C. Fix percentage_laid_off (Convert from Text to Float for Decimals)
+UPDATE layoffs_staging
+SET percentage_laid_off = NULL
+WHERE percentage_laid_off IN ('', 'None', 'NULL') OR percentage_laid_off IS NULL;
+
+ALTER TABLE layoffs_staging
+ALTER COLUMN percentage_laid_off FLOAT;
+
+COMMIT TRANSACTION;
+
+-- ==========================================
+-- STEP 5: NULL HANDLING & IMPUTATION
+-- ==========================================
+BEGIN TRANSACTION;
 
 -- Impute missing industries using known data from the same company/location
 UPDATE t1
@@ -103,7 +129,7 @@ WHERE t1.industry IS NULL
 COMMIT TRANSACTION;
 
 -- ==========================================
--- STEP 5: REMOVE UNNECESSARY DATA
+-- STEP 6: REMOVE UNNECESSARY DATA
 -- ==========================================
 BEGIN TRANSACTION;
 
@@ -114,5 +140,5 @@ WHERE total_laid_off IS NULL
 
 COMMIT TRANSACTION;
 
--- Verify final clean dataset
+-- Verify final clean dataset with proper structural schema
 SELECT * FROM layoffs_staging;
