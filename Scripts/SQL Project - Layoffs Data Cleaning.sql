@@ -99,7 +99,7 @@ SET funds_raised_millions = NULL
 WHERE funds_raised_millions IN ('', 'None', 'NULL') OR funds_raised_millions IS NULL;
 
 ALTER TABLE layoffs_staging
-ALTER COLUMN funds_raised_millions INT;
+ALTER COLUMN funds_raised_millions FLOAT;
 
 -- C. Fix percentage_laid_off (Convert from Text to Float for Decimals)
 UPDATE layoffs_staging
