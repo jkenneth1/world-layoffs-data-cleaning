@@ -38,7 +38,7 @@ To ensure the raw source data remained completely untouched, a dedicated staging
 * **The Solution:** Implemented a robust defensive casting pipeline. Converted all empty strings (`''`), text literals (`'None'`, `'NULL'`), and blank fields into standard database `NULL` tokens to guarantee safe structural conversion. Then, permanently transformed the physical table schema using standard SQL DDL alterations to lock in accurate data types for math functions:
 ```sql
 ALTER TABLE layoffs_staging ALTER COLUMN total_laid_off INT;
-ALTER TABLE layoffs_staging ALTER COLUMN funds_raised_millions INT;
+ALTER TABLE layoffs_staging ALTER COLUMN funds_raised_millions FLOAT;
 ALTER TABLE layoffs_staging ALTER COLUMN percentage_laid_off FLOAT;
 ```
 ### 6. Missing Data Imputation (Self-Join Framework)
