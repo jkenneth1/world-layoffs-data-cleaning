@@ -1,46 +1,45 @@
-# World Layoffs 2022: Data Cleaning & Standardization Project (T-SQL)
+### 🛠️ Data Cleaning Process & Pipeline
+The cleaning process was executed systematically across seven major milestones within explicit transaction blocks to guarantee database stability and absolute data integrity:
 
-## 📌 Project Overview
-Data professionals often spend up to 80% of their time cleaning data rather than analyzing it. This project addresses that reality by transforming a raw, unformatted dataset of global tech company layoffs (2022 onwards) into a structured, production-ready database schema using **Microsoft SQL Server (T-SQL)**. 
-
-The primary goal was to take dirty data—containing duplicates, inconsistent text formatting, improper data types, and missing values—and apply defensive SQL programming techniques to make it entirely safe for downstream Exploratory Data Analysis (EDA) and business intelligence reporting.
-
-* **Dataset Source:** [Kaggle - Tech Layoffs 2022](https://www.kaggle.com/datasets/swaptr/layoffs-2022)
-* **SQL Dialect:** Microsoft SQL Server (T-SQL)
-* **Core Skills Displayed:** Common Table Expressions (CTEs), Window Functions (`ROW_NUMBER`), Self-Joins for Imputation, Explicit Transactions (`BEGIN/COMMIT`), Data Type Alterations, and Advanced String Standardization.
-
----
-
-## 🛠️ Data Cleaning Process & Pipeline
-The cleaning process was executed systematically across five major milestones to ensure absolute data integrity.
-
-### 1. Staging Environment Setup
-To ensure the raw source data remained completely untouched, a dedicated staging table (`layoffs_staging`) was generated. This approach safeguards the pipeline, allowing for seamless rollbacks if an error occurs.
-
-### 2. Deduplication via Window Functions
-* **The Challenge:** The raw dataset contained completely identical duplicate rows without a unique primary key.
-* **The Solution:** Implemented a Common Table Expression (CTE) combined with the `ROW_NUMBER()` window function. By partitioning the data across all major attributes—including `company`, `location`, `industry`, `total_laid_off`, and `date`—each unique row was assigned an index. Rows with an index greater than `1` were target-deleted instantly.
-* **Optimization:** Used `ORDER BY (SELECT NULL)` to minimize sorting overhead and maximize execution speed during deduplication.
-
-### 3. Text Standardization & Error Fixing
-* **Whitespace Trimming:** Applied `TRIM()` across critical text dimensions (`company`, `location`, `country`) to eradicate erratic leading or trailing white spaces that could break downstream dashboard filters or string joins.
-* **Industry Alignment:** Standardized inconsistent industry naming conventions. For instance, multiple variations like `Crypto`, `Crypto Currency`, and `Cryptocurrency` were unified seamlessly under a single industry moniker: `'Crypto'`.
-* **Country Cleanup:** Discovered and stripped trailing punctuation anomalies (e.g., converting `'United States.'` to `'United States'`) dynamically using `TRIM('.' FROM country)`.
-
-### 4. Date Type Parsing & Optimization
-* **The Challenge:** The original date column was imported as raw text strings, creating a blocker for standard time-series analysis.
-* **The Solution:** Leveraged `TRY_CONVERT(DATE, [date], 101)` to safely parse standard `MM/DD/YYYY` text strings into actual database date types without throwing hard execution errors on edge cases.
-* **Fallback Logic via Self-Join:** Implemented a defensive fallback query joining back to the raw source data to resolve dynamically spaced string dates that failed initial parsing. Once all anomalies were resolved, the column schema was permanently updated via `ALTER TABLE ... ALTER COLUMN DATE`.
-
-### 5. Null Value Handling & Data Imputation
-* **String to Database Nulls:** Standardized literal string values (like text `'NULL'`) into genuine database `NULL` markers for numeric fields such as `funds_raised_millions`.
-* **Industry Imputation (Self-Join Framework):** Found rows where a company's `industry` value was completely missing, but the same company had valid industry records in other rows. Implemented a robust self-join on matching `company` and `location` values to automatically populate and heal the missing industry data:
 ```sql
+-- 1. TABLE ARCHITECTURE & STAGING
+-- Generated a dedicated staging table (layoffs_staging) to safeguard raw data.
+SELECT * INTO layoffs_staging FROM layoffs_raw;
+
+-- 2. DEDUPLICATION FRAMEWORK
+-- Used a CTE and ROW_NUMBER() partitioned across all attributes to delete duplicates.
+WITH DuplicateCTE AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY company, [location], industry, total_laid_off,
+    percentage_laid_off, [date], stage, country, funds_raised_millions ORDER BY (SELECT NULL)) AS row_num
+    FROM layoffs_staging
+)
+DELETE FROM DuplicateCTE WHERE row_num > 1;
+
+-- 3. TEXT & DIMENSIONAL STANDARDIZATION
+-- Eradicated erratic whitespace and unified erratic variations like 'Crypto Currency' to 'Crypto'.
+UPDATE layoffs_staging SET company = TRIM(company), [location] = TRIM([location]), country = TRIM(country);
+UPDATE layoffs_staging SET industry = 'Crypto' WHERE industry LIKE 'Crypto%';
+UPDATE layoffs_staging SET country = TRIM('.' FROM country) WHERE country LIKE '%.';
+
+-- 4. DATE PARSING & NORMALIZATION
+-- Converted raw text strings into formal database DATE types using TRY_CONVERT.
+UPDATE layoffs_staging SET [date] = TRY_CONVERT(DATE, [date], 101) WHERE [date] IS NOT NULL;
+ALTER TABLE layoffs_staging ALTER COLUMN [date] DATE;
+
+-- 5. SCHEMA TYPE-CASTING & BUG RESOLUTION
+-- Permanently altered implicit text columns into integers and floats to fix math anomalies.
+ALTER TABLE layoffs_staging ALTER COLUMN total_laid_off INT;
+ALTER TABLE layoffs_staging ALTER COLUMN funds_raised_millions INT;
+ALTER TABLE layoffs_staging ALTER COLUMN percentage_laid_off FLOAT;
+
+-- 6. MISSING DATA IMPUTATION (SELF-JOIN)
+-- Joined the table to itself on company and location to heal blank industry values.
 UPDATE t1
 SET t1.industry = t2.industry
 FROM layoffs_staging t1
-JOIN layoffs_staging t2 
-    ON t1.company = t2.company 
-    AND t1.location = t2.location
-WHERE t1.industry IS NULL 
-  AND t2.industry IS NOT NULL;
+JOIN layoffs_staging t2 ON t1.company = t2.company AND t1.location = t2.location
+WHERE t1.industry IS NULL AND t2.industry IS NOT NULL;
+
+-- 7. STRATEGIC ROW STRIPPING
+-- Filtered out and destroyed rows where both primary metrics were completely missing.
+DELETE FROM layoffs_staging WHERE total_laid_off IS NULL AND percentage_laid_off IS NULL;
