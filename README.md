@@ -39,7 +39,7 @@ ALTER TABLE layoffs_staging ALTER COLUMN total_laid_off INT;
 ALTER TABLE layoffs_staging ALTER COLUMN funds_raised_millions INT;
 ALTER TABLE layoffs_staging ALTER COLUMN percentage_laid_off FLOAT;
 
-### 6. Industry Imputation (Self-Join Framework)
+**6. Industry Imputation (Self-Join Framework)**
 Found rows where a company's industry value was completely missing, but the same company had valid industry records in other rows. Implemented a robust self-join on matching company and location values to automatically populate and heal the missing industry data:
 
 SQL
@@ -52,7 +52,7 @@ JOIN layoffs_staging t2
 WHERE t1.industry IS NULL 
   AND t2.industry IS NOT NULL;
 
-### 7. Rows & Columns Stripping
+**7. Rows & Columns Stripping**
 Identified and deleted records where both total_laid_off and percentage_laid_off were simultaneously null. Because these rows lacked the fundamental metrics required for analytics, removing them optimized table performance and streamlined the data footprint.
 
 🚀 How to Run This Project
